@@ -1,0 +1,11 @@
+apiVersion: telemetry.istio.io/v1alpha1
+kind: Telemetry
+metadata:
+  name: mesh-default
+  namespace: istio-system
+spec:
+  # no selector specified, applies to all workloads
+  metrics:
+  - providers:
+    - name: stackdriver
+    - name: prometheus

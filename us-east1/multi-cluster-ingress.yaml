@@ -1,0 +1,17 @@
+---
+apiVersion: networking.gke.io/v1
+kind: MultiClusterIngress
+metadata:
+  name: istio-ingress
+  namespace: istio-system
+  annotations:
+    networking.gke.io/static-ip: "ingress-ip"
+    networking.gke.io/frontend-config: "http-redirect"
+spec:
+  template:
+    spec:
+      backend:
+        serviceName: istio-ingressgateway-mc
+        servicePort: 443
+      tls:
+      - secretName: foo

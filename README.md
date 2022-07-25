@@ -1,0 +1,1 @@
+Directions and files for achieving multi-regional HA with GKE and Istio. Use of these files is covered in my blog post [here](robertmendal.dev/post/multicluster-two).

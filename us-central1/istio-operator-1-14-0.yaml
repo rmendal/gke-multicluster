@@ -1,0 +1,223 @@
+# Service mesh config options https://istio.io/latest/docs/reference/config/istio.mesh.v1alpha1/#MeshConfig
+# IstioOperator Options: https://istio.io/latest/docs/reference/config/istio.operator.v1alpha1/
+# GKE Prep https://istio.io/latest/docs/setup/platform-setup/gke/
+# Troubleshooting https://github.com/istio/istio/wiki/Troubleshooting-Istio#diagnostics
+apiVersion: install.istio.io/v1alpha1
+kind: IstioOperator
+metadata:
+  name: istio-controlplane-1-14-1
+  namespace: istio-system
+spec:
+  values:
+    gateways:
+      istio-ingressgateway:
+        injectionTemplate: gateway
+    global:
+      proxy:
+        holdApplicationUntilProxyStarts: true
+      meshID: mesh1
+      multiCluster:
+        clusterName: cluster2
+      network: us-central1
+  profile: default
+  tag: 1.14.1
+  revision: 1-14-1
+  hub: gcr.io/istio-release
+  meshConfig:
+    defaultConfig:
+      tracing:
+        sampling: 100 # Default is 1%
+        zipkin:
+          address: "jaeger-collector.observability:9411"
+    accessLogFile: /dev/stdout
+    enableTracing: true
+    enableAutoMtls: true # Defaults to true adding here for clarity
+    extensionProviders:
+    # This was required along with an istio telemetry resource to see stackdriver logs in GCP
+    - name: stackdriver
+      stackdriver:
+        maxTagLength: 256
+  components:
+    pilot:
+      enabled: true
+      k8s:
+        affinity:
+          podAntiAffinity:
+            requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - istiod
+              topologyKey: kubernetes.io/hostname
+        nodeSelector:
+          cloud.google.com/gke-preemptible: "true"
+        tolerations:
+          - key: "cloud.google.com/gke-preemptible"
+            effect: "NoSchedule"
+            value: "true"
+            operator: "Equal"
+        hpaSpec:
+          minReplicas: 2
+          maxReplicas: 3
+        overlays:
+        - kind: PodDisruptionBudget
+          name: istiod-1-14-1
+          patches:
+          - path: spec.minAvailable
+            value: 1
+          - path: spec.maxUnavailable
+    # When adding multiple ingress gateways ALWAYS add labels to them
+    ingressGateways:
+      - name: istio-eastwestgateway
+        label:
+          istio: eastwestgateway
+          app: istio-eastwestgateway
+          istio.io/rev: 1-14-1
+          topology.istio.io/network: us-central1
+        enabled: true # Defaults to true adding here for clarity
+        k8s:
+          podAnnotations:
+            inject.istio.io/templates: gateway
+          env:
+            # traffic through this gateway should be routed inside the network
+            # note this MUST match the topology.istio.io/network label above
+            - name: ISTIO_META_REQUESTED_NETWORK_VIEW
+              value: us-central1
+          affinity:
+            podAntiAffinity:
+              requiredDuringSchedulingIgnoredDuringExecution:
+              - labelSelector:
+                  matchExpressions:
+                  - key: app
+                    operator: In
+                    values:
+                    - istio-eastwestgateway
+                topologyKey: kubernetes.io/hostname
+          nodeSelector:
+            cloud.google.com/gke-preemptible: "true"
+          tolerations:
+            - key: "cloud.google.com/gke-preemptible"
+              effect: "NoSchedule"
+              value: "true"
+              operator: "Equal"
+          podDisruptionBudget:
+            minAvailable: 1
+          hpaSpec:
+            minReplicas: 2
+            maxReplicas: 3
+            metrics:
+              - resource:
+                  name: cpu
+                  targetAverageUtilization: 80
+                type: Resource
+            scaleTargetRef:
+              apiVersion: apps/v1
+              kind: Deployment
+              name: istio-eastwestgateway
+          resources:
+            limits:
+              cpu: 2000m
+              memory: 1024Mi
+            requests:
+              cpu: 100m
+              memory: 128Mi
+          strategy:
+            rollingUpdate:
+              maxSurge: 100%
+              maxUnavailable: 25%
+          serviceAnnotations:
+            # https://cloud.google.com/architecture/using-istio-for-internal-load-balancing-of-grpc-services
+            networking.gke.io/load-balancer-type: Internal
+            networking.gke.io/internal-load-balancer-allow-global-access: "true"
+            cloud.google.com/app-protocols: '{"https":"HTTP2"}'
+            cloud.google.com/neg: '{"ingress": true}'
+            cloud.google.com/backend-config: '{"default": "ingress-backendconfig"}'
+          service:
+            type: LoadBalancer
+            externalTrafficPolicy: Local
+            ports:
+              # REQUIRED PORTS DO NOT CHANGE
+              - name: status-port
+                port: 15021
+                targetPort: 15021
+              - name: tls
+                port: 15443
+                targetPort: 15443
+              - name: tls-istiod
+                port: 15012
+                targetPort: 15012
+              - name: tls-webhook
+                port: 15017
+                targetPort: 15017
+      - name: istio-ingressgateway
+        enabled: true # Defaults to true adding here for clarity
+        k8s:
+          podAnnotations:
+            # https://istio.io/latest/docs/ops/configuration/traffic-management/network-topologies/#configuring-network-topologies
+            # You may or may not need this. We did in order to preserve the original client IP as traffic passed through proxys
+            "proxy.istio.io/config": '{"gatewayTopology" : { "numTrustedProxies": 3 }}'
+          affinity:
+            podAntiAffinity:
+              requiredDuringSchedulingIgnoredDuringExecution:
+              - labelSelector:
+                  matchExpressions:
+                  - key: app
+                    operator: In
+                    values:
+                    - istio-ingressgateway
+                topologyKey: kubernetes.io/hostname
+          nodeSelector:
+            cloud.google.com/gke-preemptible: "true"
+          tolerations:
+            - key: "cloud.google.com/gke-preemptible"
+              effect: "NoSchedule"
+              value: "true"
+              operator: "Equal"
+          podDisruptionBudget:
+            minAvailable: 1
+          hpaSpec:
+            minReplicas: 2
+            maxReplicas: 3
+            metrics:
+              - resource:
+                  name: cpu
+                  targetAverageUtilization: 80
+                type: Resource
+            scaleTargetRef:
+              apiVersion: apps/v1
+              kind: Deployment
+              name: istio-ingressgateway
+          resources:
+            limits:
+              cpu: 2000m
+              memory: 1024Mi
+            requests:
+              cpu: 100m
+              memory: 128Mi
+          strategy:
+            rollingUpdate:
+              maxSurge: 100%
+              maxUnavailable: 25%
+          serviceAnnotations:
+            # https://cloud.google.com/architecture/using-istio-for-internal-load-balancing-of-grpc-services
+            cloud.google.com/app-protocols: '{"https":"HTTP2"}'
+            cloud.google.com/neg: '{"exposed_ports": {"443": {"name": "mesh2"}}}'
+            cloud.google.com/backend-config: '{"default": "ingress-backendconfig"}'
+          service:
+            type: ClusterIP
+            ports:
+              # REQUIRED PORTS DO NOT CHANGE
+              - name: status-port
+                protocol: TCP
+                port: 15021
+                targetPort: 15021
+              - name: http2
+                protocol: TCP
+                port: 80
+                targetPort: 8080
+              - name: https
+                protocol: TCP
+                port: 443
+                targetPort: 8443

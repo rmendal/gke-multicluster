@@ -1,0 +1,39 @@
+---
+# This service is a nearly 1:1 replica of the default istio-ingressgateway service
+# that the operator creates. The differences being the apiVersion, kind and the
+# absence of a port 80 declaration as it's unneeded due to the frontendconfig
+# redirecting all port 80 traffic to 443 before it ever reaches this service.
+# All labels are necessary and any time istio is upgraded you should update this
+# with any new labels and/or annotations and especially the new istio version.
+apiVersion: networking.gke.io/v1beta1
+kind: MultiClusterService
+metadata:
+  annotations:
+    networking.gke.io/app-protocols: '{"https":"HTTP2"}'
+    cloud.google.com/backend-config: '{"default": "ingress-backendconfig"}'
+  labels:
+    app: istio-ingressgateway
+    install.operator.istio.io/owning-resource: istio-controlplane-1-14-1
+    install.operator.istio.io/owning-resource-namespace: istio-system
+    istio: ingressgateway
+    istio.io/rev: 1-14-1
+    operator.istio.io/component: IngressGateways
+    operator.istio.io/managed: Reconcile
+    operator.istio.io/version: 1.14.1
+    release: istio
+  name: istio-ingressgateway-mc
+  namespace: istio-system
+spec:
+  template:
+    spec:
+      selector:
+        istio: ingressgateway
+      ports:
+      - name: status-port
+        port: 15021
+        protocol: TCP
+        targetPort: 15021
+      - name: https
+        port: 443
+        protocol: TCP
+        targetPort: 8443
