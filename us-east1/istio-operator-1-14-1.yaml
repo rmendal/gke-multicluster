@@ -28,7 +28,7 @@ spec:
       tracing:
         sampling: 100 # Default is 1%
         zipkin:
-          address: "jaeger-collector.observability:9411"
+          address: "jaeger-collector:9411"
     accessLogFile: /dev/stdout
     enableTracing: true
     enableAutoMtls: true # Defaults to true adding here for clarity
