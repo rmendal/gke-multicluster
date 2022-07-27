@@ -5,7 +5,7 @@ metadata:
   name: istio-ingress
   namespace: istio-system
   annotations:
-    networking.gke.io/static-ip: "ingress-ip"
+    networking.gke.io/static-ip: "your-cool-ip-name"
     networking.gke.io/frontend-config: "http-redirect"
 spec:
   template:
