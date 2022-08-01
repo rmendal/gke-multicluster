@@ -50,7 +50,7 @@ spec:
         resources:
           limits:
             cpu: 100m
-            memory: 64Mib
+            memory: 64Mi
 ---
 apiVersion: networking.istio.io/v1beta1
 kind: VirtualService
